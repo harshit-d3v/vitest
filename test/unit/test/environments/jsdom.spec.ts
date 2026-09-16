@@ -182,6 +182,23 @@ describe('FormData', () => {
 
     expect(retrievedBlob).toBeInstanceOf(File)
   })
+
+  test('keeps Blob bytes when used as a Request body', async () => {
+    const blob = new Blob(['hello world'], { type: 'text/plain' })
+    const request = new Request('http://localhost/', { method: 'POST', body: blob })
+
+    expect(await request.text()).toBe('hello world')
+  })
+
+  test('keeps File bytes inside a multipart Request body', async () => {
+    const form = new FormData()
+    form.append('file', new File(['file content'], 'report.csv', { type: 'text/csv' }))
+    const request = new Request('http://localhost/', { method: 'POST', body: form })
+
+    const body = await request.text()
+    const partBody = body.split('\r\n\r\n')[1].split('\r\n')[0]
+    expect(partBody).toBe('file content')
+  })
 })
 
 test('DOM APIs accept AbortController', () => {
