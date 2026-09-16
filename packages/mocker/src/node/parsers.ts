@@ -106,14 +106,10 @@ export function collectModuleExports(
       return []
     }
 
-    const resolvedModuleFormat = resolveModuleFormat(resolvedModulePath, code)
     if (ext === '.json') {
       return ['default']
     }
-    else {
-      // can't do wasm, for example
-      console.warn(`Cannot process '${resolvedModuleFormat}' imported from ${filename} because of unknown file extension: ${ext}.`)
-    }
+    const resolvedModuleFormat = resolveModuleFormat(pathToFileURL(resolvedModulePath).toString(), code)
     if (resolvedModuleFormat) {
       return collectModuleExports(resolvedModulePath, code, resolvedModuleFormat, exports)
     }

@@ -48,6 +48,9 @@ describe.runIf(module.registerHooks)('supported', () => {
           "Squared": "passed",
           "add": "passed",
         },
+        "test/manual-mock-star.test.ts": {
+          "manual mock keeps exports re-exported with export *": "passed",
+        },
         "test/manual-mock.test.ts": {
           "builtin node modules are mocked": "passed",
           "deps in node_modules are mocked": "passed",
