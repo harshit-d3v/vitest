@@ -2129,3 +2129,54 @@ it('expected and actual reuse the stringification from the diff', () => {
     expect.objectContaining({ y: 3 }),
   ]))
 })
+
+describe('iterable equality on matchers that take a value', () => {
+  const a = () => new Map([['a', 1]])
+  const b = () => new Map([['b', 2]])
+
+  it('toContainEqual distinguishes different Maps and Sets', () => {
+    expect([a()]).toContainEqual(a())
+    expect([a()]).not.toContainEqual(b())
+    expect([new Set([1])]).not.toContainEqual(new Set([2]))
+  })
+
+  it('toHaveProperty distinguishes different Maps', () => {
+    expect({ m: a() }).toHaveProperty('m', a())
+    expect({ m: a() }).not.toHaveProperty('m', b())
+  })
+
+  it('toBeOneOf distinguishes different Maps', () => {
+    expect(a()).toBeOneOf([a()])
+    expect(a()).not.toBeOneOf([b()])
+    expect(a()).not.toBeOneOf(new Set([b()]))
+  })
+
+  it('return and resolve matchers distinguish different Maps', async () => {
+    const returns = vi.fn(() => a())
+    returns()
+    expect(returns).toHaveReturnedWith(a())
+    expect(returns).not.toHaveReturnedWith(b())
+    expect(returns).toHaveLastReturnedWith(a())
+    expect(returns).not.toHaveLastReturnedWith(b())
+    expect(returns).toHaveNthReturnedWith(1, a())
+    expect(returns).not.toHaveNthReturnedWith(1, b())
+
+    const resolves = vi.fn(async () => a())
+    await resolves()
+    expect(resolves).toHaveResolvedWith(a())
+    expect(resolves).not.toHaveResolvedWith(b())
+    expect(resolves).toHaveLastResolvedWith(a())
+    expect(resolves).not.toHaveLastResolvedWith(b())
+    expect(resolves).toHaveNthResolvedWith(1, a())
+    expect(resolves).not.toHaveNthResolvedWith(1, b())
+  })
+
+  it('return matchers honour custom equality testers', () => {
+    expect.addEqualityTesters([(x, y) => (x === 'lhs' && y === 'rhs') ? true : undefined])
+    const fn = vi.fn(() => 'lhs')
+    fn()
+    expect(fn).toHaveReturnedWith('rhs')
+    expect(fn).toHaveLastReturnedWith('rhs')
+    expect(fn).toHaveNthReturnedWith(1, 'rhs')
+  })
+})
