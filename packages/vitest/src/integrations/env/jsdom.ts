@@ -38,6 +38,7 @@ function catchWindowErrors(window: DOMWindow) {
 
 let NodeFormData_!: typeof FormData
 let NodeBlob_!: typeof Blob
+let NodeFile_!: typeof File
 let NodeRequest_!: typeof Request
 
 interface LegacyResourceLoader {
@@ -75,6 +76,7 @@ export default <Environment>{
     // delay initialization because it takes ~1s
     NodeFormData_ = globalThis.FormData
     NodeBlob_ = globalThis.Blob
+    NodeFile_ = globalThis.File
     NodeRequest_ = globalThis.Request
 
     const jsdomModule = await import('jsdom')
@@ -184,6 +186,7 @@ export default <Environment>{
     // delay initialization because it takes ~1s
     NodeFormData_ = globalThis.FormData
     NodeBlob_ = globalThis.Blob
+    NodeFile_ = globalThis.File
     NodeRequest_ = globalThis.Request
 
     const jsdomModule = await import('jsdom')
@@ -312,7 +315,9 @@ function createCompatUtils(window: DOMWindow): CompatUtils {
       const nodeFormData = new NodeFormData_()
       formData.forEach((value, key) => {
         if (value instanceof window.Blob) {
-          nodeFormData.append(key, utils.makeCompatBlob(value as any) as any)
+          // Node's FormData wraps a Blob with the global File, which is jsdom's here
+          const compatBlob = utils.makeCompatBlob(value as any)
+          nodeFormData.append(key, new NodeFile_([compatBlob], value.name, { type: value.type, lastModified: value.lastModified }))
         }
         else {
           nodeFormData.append(key, value)
