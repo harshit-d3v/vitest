@@ -199,6 +199,34 @@ describe('FormData', () => {
     const partBody = body.split('\r\n\r\n')[1].split('\r\n')[0]
     expect(partBody).toBe('file content')
   })
+
+  test('parses a multipart Request body back into FormData', async () => {
+    const form = new FormData()
+    form.append('file', new File(['test'], 'test.txt', { type: 'text/plain' }))
+    form.append('field', 'value')
+    const request = new Request('http://localhost/', { method: 'POST', body: form })
+
+    const parsed = await request.formData()
+    expect(parsed).toBeInstanceOf(FormData)
+    const file = parsed.get('file') as File
+    expect(file).toBeInstanceOf(File)
+    expect(file.name).toBe('test.txt')
+    expect(file.type).toBe('text/plain')
+    expect(await file.text()).toBe('test')
+    expect(parsed.get('field')).toBe('value')
+  })
+
+  test('parses a multipart Response body back into FormData', async () => {
+    const form = new FormData()
+    form.append('file', new File(['test'], 'test.txt'))
+    const request = new Request('http://localhost/', { method: 'POST', body: form })
+    const response = new Response(request.body, { headers: request.headers })
+
+    const parsed = await response.formData()
+    const file = parsed.get('file') as File
+    expect(file).toBeInstanceOf(File)
+    expect(await file.text()).toBe('test')
+  })
 })
 
 test('DOM APIs accept AbortController', () => {

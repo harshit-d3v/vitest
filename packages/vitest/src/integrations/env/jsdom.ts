@@ -40,6 +40,7 @@ let NodeFormData_!: typeof FormData
 let NodeBlob_!: typeof Blob
 let NodeFile_!: typeof File
 let NodeRequest_!: typeof Request
+let NodeResponse_!: typeof Response
 
 interface LegacyResourceLoader {
   new (options?: { userAgent?: string }): NonNullable<ConstructorOptions['resources']>
@@ -78,6 +79,7 @@ export default <Environment>{
     NodeBlob_ = globalThis.Blob
     NodeFile_ = globalThis.File
     NodeRequest_ = globalThis.Request
+    NodeResponse_ = globalThis.Response
 
     const jsdomModule = await import('jsdom')
     const { CookieJar, JSDOM, VirtualConsole } = jsdomModule
@@ -129,6 +131,7 @@ export default <Environment>{
     dom.window.jsdom = dom
     dom.window.Request = createCompatRequest(utils)
     dom.window.URL = createJSDOMCompatURL(utils)
+    const restoreFormDataParsing = patchFormDataParsing(utils)
 
     // inject web globals if they are missing in JSDOM but otherwise available in Nodejs
     // https://nodejs.org/dist/latest/docs/api/globals.html
@@ -175,6 +178,7 @@ export default <Environment>{
         return dom.getInternalVMContext()
       },
       teardown() {
+        restoreFormDataParsing()
         clearAddEventListenerPatch()
         clearWindowErrors()
         dom.window.close()
@@ -188,6 +192,7 @@ export default <Environment>{
     NodeBlob_ = globalThis.Blob
     NodeFile_ = globalThis.File
     NodeRequest_ = globalThis.Request
+    NodeResponse_ = globalThis.Response
 
     const jsdomModule = await import('jsdom')
     const { CookieJar, JSDOM, VirtualConsole } = jsdomModule
@@ -240,9 +245,11 @@ export default <Environment>{
     global.jsdom = dom
     global.Request = createCompatRequest(utils)
     global.URL = createJSDOMCompatURL(utils)
+    const restoreFormDataParsing = patchFormDataParsing(utils)
 
     return {
       teardown(global) {
+        restoreFormDataParsing()
         clearAddEventListenerPatch()
         clearWindowErrors()
         dom.window.close()
@@ -301,6 +308,30 @@ interface CompatUtils {
   window: DOMWindow
   makeCompatBlob: (blob: Blob) => Blob
   makeCompatFormData: (formData: FormData) => FormData
+  makeWindowFormData: (formData: FormData) => Promise<FormData>
+}
+
+function patchFormDataParsing(utils: CompatUtils) {
+  const restores = [NodeRequest_, NodeResponse_].map((Class) => {
+    const original = Class.prototype.formData
+    // undici builds each part with the global File and then brand checks it
+    Class.prototype.formData = async function () {
+      const File = globalThis.File
+      globalThis.File = NodeFile_
+      let formData: FormData
+      try {
+        formData = await original.call(this)
+      }
+      finally {
+        globalThis.File = File
+      }
+      return utils.makeWindowFormData(formData)
+    }
+    return () => {
+      Class.prototype.formData = original
+    }
+  })
+  return () => restores.forEach(restore => restore())
 }
 
 function createCompatUtils(window: DOMWindow): CompatUtils {
@@ -324,6 +355,21 @@ function createCompatUtils(window: DOMWindow): CompatUtils {
         }
       })
       return nodeFormData
+    },
+    async makeWindowFormData(formData: FormData) {
+      const windowFormData = new window.FormData()
+      const entries: [string, FormDataEntryValue][] = []
+      formData.forEach((value, key) => entries.push([key, value]))
+      for (const [key, value] of entries) {
+        if (typeof value === 'string') {
+          windowFormData.append(key, value)
+        }
+        else {
+          const bytes = await value.arrayBuffer()
+          windowFormData.append(key, new window.File([bytes], value.name, { type: value.type, lastModified: value.lastModified }))
+        }
+      }
+      return windowFormData as FormData
     },
     makeCompatBlob(blob: Blob) {
       const impl = (blob as any)[implSymbol]
